@@ -367,10 +367,8 @@ class BatchProcessThread(QThread):
             self.task_queue.queue.clear()
 
     def _handle_sub_note_task(self, batch_task: BatchTask):
-        """处理字幕+笔记任务：基于转录的代码逻辑，添加生成笔记的功能"""
+        """处理字幕+笔记任务：支持直接输入字幕文件或音视频文件"""
         logger.info(f"开始处理字幕+笔记任务: {batch_task.file_path}")
-        
-        # 检查提示词文件是否存在
         from pathlib import Path
         import os
         prompt_file = Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) / "promt_notes.md"
@@ -378,27 +376,122 @@ class BatchProcessThread(QThread):
             logger.info(f"未找到提示词文件，将自动创建默认提示词文件: {prompt_file}")
         else:
             logger.info(f"找到提示词文件: {prompt_file}")
-            
-        # 类似于转录任务，先执行转录
-        task = self.factory.create_transcribe_task(batch_task.file_path)
-        thread = TranscriptThread(task)
-        batch_task.current_thread = thread
 
-        # 保存线程引用
-        self.threads.append(thread)
+        # 判断是否为字幕文件
+        subtitle_exts = {".srt", ".ass", ".vtt", ".ssa"}
+        file_ext = Path(batch_task.file_path).suffix.lower()
+        if file_ext in subtitle_exts:
+            # 直接生成笔记，无需转录
+            self._generate_notes_from_subtitle(batch_task, batch_task.file_path)
+        else:
+            # 走原有音视频转录流程
+            task = self.factory.create_transcribe_task(batch_task.file_path)
+            thread = TranscriptThread(task)
+            batch_task.current_thread = thread
+            self.threads.append(thread)
+            thread.progress.connect(
+                partial(self._on_sub_note_progress_wrapper, batch_task), Qt.QueuedConnection
+            )
+            thread.error.connect(
+                partial(self._on_error_wrapper, batch_task), Qt.QueuedConnection
+            )
+            thread.finished.connect(
+                partial(self._on_sub_note_finished_wrapper, batch_task),
+                Qt.QueuedConnection,
+            )
+            thread.start()
 
-        thread.progress.connect(
-            partial(self._on_sub_note_progress_wrapper, batch_task), Qt.QueuedConnection
-        )
-        thread.error.connect(
-            partial(self._on_error_wrapper, batch_task), Qt.QueuedConnection
-        )
-        thread.finished.connect(
-            partial(self._on_sub_note_finished_wrapper, batch_task),
-            Qt.QueuedConnection,
-        )
-
-        thread.start()
+    def _generate_notes_from_subtitle(self, batch_task: BatchTask, subtitle_path: str):
+        """直接从字幕文件生成笔记"""
+        try:
+            self.task_progress.emit(batch_task.file_path, 10, "正在读取字幕文件...")
+            from app.core.bk_asr.asr_data import ASRData
+            from PyQt5.QtCore import QTime
+            asr_data = ASRData.from_subtitle_file(subtitle_path)
+            # 获取LLM服务配置
+            from app.common.config import cfg
+            from app.core.entities import LLMServiceEnum
+            current_service = cfg.note_llm_service.value or cfg.llm_service.value
+            if current_service == LLMServiceEnum.OPENAI:
+                base_url = cfg.note_openai_api_base.value or cfg.openai_api_base.value
+                api_key = cfg.note_openai_api_key.value or cfg.openai_api_key.value
+                llm_model = cfg.note_openai_model.value or cfg.openai_model.value
+            elif current_service == LLMServiceEnum.SILICON_CLOUD:
+                base_url = cfg.note_silicon_cloud_api_base.value or cfg.silicon_cloud_api_base.value
+                api_key = cfg.note_silicon_cloud_api_key.value or cfg.silicon_cloud_api_key.value
+                llm_model = cfg.note_silicon_cloud_model.value or cfg.silicon_cloud_model.value
+            elif current_service == LLMServiceEnum.DEEPSEEK:
+                base_url = cfg.note_deepseek_api_base.value or cfg.deepseek_api_base.value
+                api_key = cfg.note_deepseek_api_key.value or cfg.deepseek_api_key.value
+                llm_model = cfg.note_deepseek_model.value or cfg.deepseek_model.value
+            elif current_service == LLMServiceEnum.OLLAMA:
+                base_url = cfg.note_ollama_api_base.value or cfg.ollama_api_base.value
+                api_key = cfg.note_ollama_api_key.value or cfg.ollama_api_key.value
+                llm_model = cfg.note_ollama_model.value or cfg.ollama_model.value
+            elif current_service == LLMServiceEnum.LM_STUDIO:
+                base_url = cfg.note_lm_studio_api_base.value or cfg.lm_studio_api_base.value
+                api_key = cfg.note_lm_studio_api_key.value or cfg.lm_studio_api_key.value
+                llm_model = cfg.note_lm_studio_model.value or cfg.lm_studio_model.value
+            elif current_service == LLMServiceEnum.GEMINI:
+                base_url = cfg.note_gemini_api_base.value or cfg.gemini_api_base.value
+                api_key = cfg.note_gemini_api_key.value or cfg.gemini_api_key.value
+                llm_model = cfg.note_gemini_model.value or cfg.gemini_model.value
+            elif current_service == LLMServiceEnum.CHATGLM:
+                base_url = cfg.note_chatglm_api_base.value or cfg.chatglm_api_base.value
+                api_key = cfg.note_chatglm_api_key.value or cfg.chatglm_api_key.value
+                llm_model = cfg.note_chatglm_model.value or cfg.chatglm_model.value
+            elif current_service == LLMServiceEnum.PUBLIC:
+                base_url = cfg.note_public_api_base.value or cfg.public_api_base.value
+                api_key = cfg.note_public_api_key.value or cfg.public_api_key.value
+                llm_model = cfg.note_public_model.value or cfg.public_model.value
+            elif current_service == LLMServiceEnum.DISABLED:
+                self.task_progress.emit(batch_task.file_path, 100, "笔记功能已禁用")
+                batch_task.status = BatchTaskStatus.COMPLETED
+                self.task_completed.emit(batch_task.file_path)
+                return
+            else:
+                raise ValueError(f"Unsupported or unconfigured LLM service for notes: {current_service}")
+            # 提取字幕文本
+            subtitle_text = ""
+            for seg in asr_data.segments:
+                start_time = QTime(0, 0).addMSecs(seg.start_time).toString("hh:mm:ss.zzz")[:-2]
+                subtitle_text += f"[{start_time}] {seg.text}\\n"
+            from string import Template
+            notes_path = self.factory.get_notes_path(subtitle_path)
+            prompt_file = Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) / "promt_notes.md"
+            if prompt_file.exists():
+                prompt_template_text = prompt_file.read_text(encoding="utf-8")
+            else:
+                prompt_template_text = "You are a helpful assistant that summarizes video transcripts into markdown notes."
+            usr_prompt_template = """Subtitle content:\n${subtitle_text}\n\nBased on the subtitle content, please generate concise and structured notes in Markdown format.\nRequirements:\n1. Output should be directly in Markdown format (no code blocks wrapping the entire content).\n2. Avoid adding extra introductory or concluding remarks.\n3. Ensure the notes maintain logical flow and coherence.\n4. Use appropriate Markdown syntax (headings, lists, bold text, etc.) for clarity.\n\nPlease provide only the Markdown notes.\n"""
+            system_prompt = Template(prompt_template_text).safe_substitute(subtitle_text=subtitle_text)
+            user_prompt = Template(usr_prompt_template).safe_substitute(subtitle_text=subtitle_text)
+            self.task_progress.emit(batch_task.file_path, 60, "正在使用大语言模型生成笔记...")
+            import openai
+            effective_api_key = api_key if api_key and api_key.lower() not in ['ollama', 'lm-studio', 'none', ''] else None
+            client = openai.OpenAI(
+                base_url=base_url,
+                api_key=effective_api_key
+            )
+            response = client.chat.completions.create(
+                model=llm_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.3
+            )
+            markdown_notes = response.choices[0].message.content
+            with open(notes_path, "w", encoding="utf-8") as f:
+                f.write(markdown_notes)
+            self.task_progress.emit(batch_task.file_path, 100, "笔记生成完成")
+            batch_task.status = BatchTaskStatus.COMPLETED
+            self.task_completed.emit(batch_task.file_path)
+        except Exception as e:
+            logger.exception(f"字幕转笔记失败: {str(e)}")
+            batch_task.status = BatchTaskStatus.FAILED
+            batch_task.error_message = f"字幕转笔记失败: {str(e)}"
+            self.task_error.emit(batch_task.file_path, batch_task.error_message)
 
     def _on_sub_note_progress_wrapper(
         self, batch_task: BatchTask, progress: int, message: str

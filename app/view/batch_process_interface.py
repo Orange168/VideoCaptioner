@@ -189,6 +189,15 @@ class BatchProcessInterface(QWidget):
         # 对有效文件按文件名排序
         valid_files.sort(key=lambda x: os.path.basename(x).lower())
 
+        # 智能切换任务类型：如果拖入的全是字幕文件且当前不是SUB_NOTE，自动切换
+        all_subtitle = all(
+            any(f.lower().endswith(f".{fmt.value}") for fmt in SupportedSubtitleFormats)
+            for f in valid_files
+        )
+        if all_subtitle and task_type != BatchTaskType.SUB_NOTE:
+            self.task_type_combo.setCurrentText(str(BatchTaskType.SUB_NOTE))
+            task_type = BatchTaskType.SUB_NOTE
+
         # 如果表格为空，自动检测文件类型并设置任务类型
         if self.task_table.rowCount() == 0 and self.task_type_combo.currentIndex() == 0:
             first_file = valid_files[0].lower()
@@ -208,19 +217,29 @@ class BatchProcessInterface(QWidget):
             #     task_type = BatchTaskType.FULL_PROCESS
 
         # 过滤文件类型
-        valid_files = self.filter_files(valid_files, task_type)
+        filtered_files = self.filter_files(valid_files, task_type)
 
-        if not valid_files:
-            InfoBar.warning(
-                title="无效文件",
-                content=f"请选择正确的文件类型",
-                duration=3000,
-                position=InfoBarPosition.TOP,
-                parent=self,
-            )
+        if not filtered_files:
+            # 优化提示：如果全是字幕文件但类型不符，给出更友好的提示
+            if all_subtitle and task_type != BatchTaskType.SUB_NOTE:
+                InfoBar.warning(
+                    title="无效文件",
+                    content="请切换到'字幕+笔记'任务类型或选择支持的文件类型",
+                    duration=3000,
+                    position=InfoBarPosition.TOP,
+                    parent=self,
+                )
+            else:
+                InfoBar.warning(
+                    title="无效文件",
+                    content=f"请选择正确的文件类型",
+                    duration=3000,
+                    position=InfoBarPosition.TOP,
+                    parent=self,
+                )
             return
 
-        for file_path in valid_files:
+        for file_path in filtered_files:
             # 检查是否已存在相同任务
             exists = False
             for row in range(self.task_table.rowCount()):
@@ -245,13 +264,12 @@ class BatchProcessInterface(QWidget):
         if task_type in [
             BatchTaskType.TRANSCRIBE, 
             BatchTaskType.TRANS_SUB,
-            BatchTaskType.SUB_NOTE,
             BatchTaskType.FULL_PROCESS,
         ]:
             valid_extensions = {f".{fmt.value}" for fmt in SupportedAudioFormats} | {
                 f".{fmt.value}" for fmt in SupportedVideoFormats
             }
-        elif task_type == BatchTaskType.SUBTITLE:
+        elif task_type in [BatchTaskType.SUBTITLE, BatchTaskType.SUB_NOTE]:
             valid_extensions = {f".{fmt.value}" for fmt in SupportedSubtitleFormats}
 
         return [

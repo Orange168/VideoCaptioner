@@ -337,7 +337,7 @@ class SettingInterface(ScrollArea):
                 "api_base_cfg": cfg.gemini_api_base,
                 "model_cfg": cfg.gemini_model,
                 "default_base": "https://generativelanguage.googleapis.com/v1beta/openai/",
-                "default_models": ["gemini-2.0-flash-exp"],
+                "default_models": ["gemini-1.5-pro", "gemini-2.0-flash-exp"],
             },
             LLMServiceEnum.CHATGLM: {
                 "prefix": "chatglm",
@@ -397,15 +397,69 @@ class SettingInterface(ScrollArea):
             setattr(self, f"{prefix}_api_base_card", api_base_card)
 
             # 创建模型选择卡片
-            model_card = EditComboBoxSettingCard(
-                config["model_cfg"],
-                FIF.ROBOT,
-                self.tr("模型"),
-                self.tr(f"选择 {service.value} 模型"),
-                config["default_models"],
-                self.llmGroup,
-            )
-            setattr(self, f"{prefix}_model_card", model_card)
+            # Gemini模型优先用缓存
+            if service == LLMServiceEnum.GEMINI:
+                # 读取缓存：如果是列表则为模型列表，如果是字符串则为上次选中的模型
+                cached = config["model_cfg"].value
+                if isinstance(cached, list) and cached:
+                    model_card = EditComboBoxSettingCard(
+                        config["model_cfg"],
+                        FIF.ROBOT,
+                        self.tr("模型"),
+                        self.tr(f"选择 {service.value} 模型"),
+                        cached,
+                        self.llmGroup,
+                    )
+                    # 如果有上次选中的模型，设置为选中项
+                    last_selected = getattr(config["model_cfg"], "selected", None)
+                    if isinstance(last_selected, str) and last_selected in cached:
+                        model_card.comboBox.setCurrentText(last_selected)
+                    # 监听选项变化，缓存选中项
+                    def on_gemini_model_changed(text):
+                        from qfluentwidgets.common.config import qconfig
+                        qconfig.set(config["model_cfg"], text)
+                    model_card.comboBox.currentTextChanged.connect(on_gemini_model_changed)
+                elif isinstance(cached, str) and cached:
+                    # 只有一个字符串，作为选中项
+                    model_card = EditComboBoxSettingCard(
+                        config["model_cfg"],
+                        FIF.ROBOT,
+                        self.tr("模型"),
+                        self.tr(f"选择 {service.value} 模型"),
+                        config["default_models"],
+                        self.llmGroup,
+                    )
+                    model_card.comboBox.setCurrentText(cached)
+                    def on_gemini_model_changed(text):
+                        from qfluentwidgets.common.config import qconfig
+                        qconfig.set(config["model_cfg"], text)
+                    model_card.comboBox.currentTextChanged.connect(on_gemini_model_changed)
+                else:
+                    model_card = EditComboBoxSettingCard(
+                        config["model_cfg"],
+                        FIF.ROBOT,
+                        self.tr("模型"),
+                        self.tr(f"选择 {service.value} 模型"),
+                        config["default_models"],
+                        self.llmGroup,
+                    )
+                    def on_gemini_model_changed(text):
+                        from qfluentwidgets.common.config import qconfig
+                        qconfig.set(config["model_cfg"], text)
+                    model_card.comboBox.currentTextChanged.connect(on_gemini_model_changed)
+            else:
+                model_card = EditComboBoxSettingCard(
+                    config["model_cfg"],
+                    FIF.ROBOT,
+                    self.tr("模型"),
+                    self.tr(f"选择 {service.value} 模型"),
+                    config["default_models"],
+                    self.llmGroup,
+                )
+                def on_gemini_model_changed(text):
+                    from qfluentwidgets.common.config import qconfig
+                    qconfig.set(config["model_cfg"], text)
+                model_card.comboBox.currentTextChanged.connect(on_gemini_model_changed)
 
             # 存储服务配置
             cards = [api_key_card, api_base_card, model_card]
@@ -558,7 +612,7 @@ class SettingInterface(ScrollArea):
                 "api_base_cfg": cfg.note_gemini_api_base,
                 "model_cfg": cfg.note_gemini_model,
                 "default_base": "https://generativelanguage.googleapis.com/v1beta/openai/",
-                "default_models": ["gemini-2.0-flash-exp"],
+                "default_models": ["gemini-1.5-pro", "gemini-2.0-flash-exp"],
             },
             LLMServiceEnum.CHATGLM: {
                 "prefix": "note_chatglm",
@@ -618,15 +672,69 @@ class SettingInterface(ScrollArea):
             setattr(self, f"{prefix}_api_base_card", api_base_card)
 
             # 创建模型选择卡片
-            model_card = EditComboBoxSettingCard(
-                config["model_cfg"],
-                FIF.ROBOT,
-                self.tr("模型"),
-                self.tr(f"选择 {service.value} 模型"),
-                config["default_models"],
-                self.noteLLMGroup,
-            )
-            setattr(self, f"{prefix}_model_card", model_card)
+            # Gemini模型优先用缓存
+            if service == LLMServiceEnum.GEMINI:
+                # 读取缓存：如果是列表则为模型列表，如果是字符串则为上次选中的模型
+                cached = config["model_cfg"].value
+                if isinstance(cached, list) and cached:
+                    model_card = EditComboBoxSettingCard(
+                        config["model_cfg"],
+                        FIF.ROBOT,
+                        self.tr("模型"),
+                        self.tr(f"选择 {service.value} 模型"),
+                        cached,
+                        self.noteLLMGroup,
+                    )
+                    # 如果有上次选中的模型，设置为选中项
+                    last_selected = getattr(config["model_cfg"], "selected", None)
+                    if isinstance(last_selected, str) and last_selected in cached:
+                        model_card.comboBox.setCurrentText(last_selected)
+                    # 监听选项变化，缓存选中项
+                    def on_gemini_model_changed(text):
+                        from qfluentwidgets.common.config import qconfig
+                        qconfig.set(config["model_cfg"], text)
+                    model_card.comboBox.currentTextChanged.connect(on_gemini_model_changed)
+                elif isinstance(cached, str) and cached:
+                    # 只有一个字符串，作为选中项
+                    model_card = EditComboBoxSettingCard(
+                        config["model_cfg"],
+                        FIF.ROBOT,
+                        self.tr("模型"),
+                        self.tr(f"选择 {service.value} 模型"),
+                        config["default_models"],
+                        self.noteLLMGroup,
+                    )
+                    model_card.comboBox.setCurrentText(cached)
+                    def on_gemini_model_changed(text):
+                        from qfluentwidgets.common.config import qconfig
+                        qconfig.set(config["model_cfg"], text)
+                    model_card.comboBox.currentTextChanged.connect(on_gemini_model_changed)
+                else:
+                    model_card = EditComboBoxSettingCard(
+                        config["model_cfg"],
+                        FIF.ROBOT,
+                        self.tr("模型"),
+                        self.tr(f"选择 {service.value} 模型"),
+                        config["default_models"],
+                        self.noteLLMGroup,
+                    )
+                    def on_gemini_model_changed(text):
+                        from qfluentwidgets.common.config import qconfig
+                        qconfig.set(config["model_cfg"], text)
+                    model_card.comboBox.currentTextChanged.connect(on_gemini_model_changed)
+            else:
+                model_card = EditComboBoxSettingCard(
+                    config["model_cfg"],
+                    FIF.ROBOT,
+                    self.tr("模型"),
+                    self.tr(f"选择 {service.value} 模型"),
+                    config["default_models"],
+                    self.noteLLMGroup,
+                )
+                def on_gemini_model_changed(text):
+                    from qfluentwidgets.common.config import qconfig
+                    qconfig.set(config["model_cfg"], text)
+                model_card.comboBox.currentTextChanged.connect(on_gemini_model_changed)
 
             # 存储服务配置
             cards = [api_key_card, api_base_card, model_card]

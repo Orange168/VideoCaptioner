@@ -114,7 +114,7 @@ class Config(QConfig):
     )
 
     # 笔记处理的Gemini配置
-    note_gemini_model = ConfigItem("NoteLLM", "Gemini_Model", "gemini-2.0-flash-exp")
+    note_gemini_model = ConfigItem("NoteLLM", "Gemini_Model", "gemini-1.5-pro")
     note_gemini_api_key = ConfigItem("NoteLLM", "Gemini_API_Key", "")
     note_gemini_api_base = ConfigItem(
         "NoteLLM",
@@ -164,7 +164,7 @@ class Config(QConfig):
         "LLM", "LmStudio_API_Base", "http://localhost:1234/v1"
     )
 
-    gemini_model = ConfigItem("LLM", "Gemini_Model", "gemini-pro")
+    gemini_model = ConfigItem("LLM", "Gemini_Model", "gemini-1.5-pro")
     gemini_api_key = ConfigItem("LLM", "Gemini_API_Key", "")
     gemini_api_base = ConfigItem(
         "LLM",
