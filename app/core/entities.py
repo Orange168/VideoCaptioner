@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from random import randint
 from typing import List, Optional
+import os
 
 
 class SupportedAudioFormats(Enum):
@@ -666,6 +667,7 @@ class BatchTaskType(Enum):
     TRANSCRIBE = "批量转录"
     SUBTITLE = "批量字幕"
     TRANS_SUB = "转录+字幕"
+    SUB_NOTE = "字幕+笔记"
     FULL_PROCESS = "全流程处理"
 
     def __str__(self):
@@ -682,3 +684,8 @@ class BatchTaskStatus(Enum):
 
     def __str__(self):
         return self.value
+
+
+def adjust_concurrent_tasks(self):
+    cpu_count = os.cpu_count()
+    self.max_concurrent_tasks = min(cpu_count - 1, 3)  # 预留1个核心给系统
