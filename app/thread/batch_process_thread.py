@@ -87,6 +87,8 @@ class BatchProcessThread(QThread):
                 self._handle_subtitle_task(batch_task)
             elif batch_task.task_type == BatchTaskType.TRANS_SUB:
                 self._handle_trans_sub_task(batch_task)
+            elif batch_task.task_type == BatchTaskType.SUB_NOTE:
+                self._handle_sub_note_task(batch_task)
             elif batch_task.task_type == BatchTaskType.FULL_PROCESS:
                 self._handle_full_process_task(batch_task)
 
@@ -360,3 +362,175 @@ class BatchProcessThread(QThread):
         # 清空任务队列
         with self.task_queue.mutex:
             self.task_queue.queue.clear()
+
+    def _handle_sub_note_task(self, batch_task: BatchTask):
+        """处理字幕+笔记任务：基于转录的代码逻辑，添加生成笔记的功能"""
+        logger.info(f"开始处理字幕+笔记任务: {batch_task.file_path}")
+        
+        # 检查提示词文件是否存在
+        from pathlib import Path
+        import os
+        prompt_file = Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) / "promt_notes.md"
+        if not prompt_file.exists():
+            logger.info(f"未找到提示词文件，将自动创建默认提示词文件: {prompt_file}")
+        else:
+            logger.info(f"找到提示词文件: {prompt_file}")
+            
+        # 类似于转录任务，先执行转录
+        task = self.factory.create_transcribe_task(batch_task.file_path)
+        thread = TranscriptThread(task)
+        batch_task.current_thread = thread
+
+        # 保存线程引用
+        self.threads.append(thread)
+
+        thread.progress.connect(
+            partial(self._on_sub_note_progress_wrapper, batch_task), Qt.QueuedConnection
+        )
+        thread.error.connect(
+            partial(self._on_error_wrapper, batch_task), Qt.QueuedConnection
+        )
+        thread.finished.connect(
+            partial(self._on_sub_note_finished_wrapper, batch_task),
+            Qt.QueuedConnection,
+        )
+
+        thread.start()
+
+    def _on_sub_note_progress_wrapper(
+        self, batch_task: BatchTask, progress: int, message: str
+    ):
+        """字幕+笔记任务进度包装器"""
+        progress = progress // 2  # 转录占50%进度
+        self.task_progress.emit(batch_task.file_path, progress, message)
+
+    def _on_sub_note_finished_wrapper(
+        self, batch_task: BatchTask, task: TranscribeTask
+    ):
+        """字幕转录完成后生成笔记"""
+        if batch_task.current_thread in self.threads:
+            self.threads.remove(batch_task.current_thread)
+
+        # 开始笔记生成过程
+        import os
+        from pathlib import Path
+        prompt_file = Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) / "promt_notes.md"
+        logger.info(f"提示词文件位置: {prompt_file}")
+        logger.info(f"可通过编辑该文件自定义笔记生成效果，文件中使用{{subtitle_text}}作为字幕内容占位符")
+        
+        self.task_progress.emit(batch_task.file_path, 50, "正在生成笔记...")
+        
+        try:
+            # 获取字幕内容
+            from app.core.bk_asr.asr_data import ASRData
+            output_path = task.output_path
+            asr_data = ASRData.from_subtitle_file(output_path)
+            
+            # 获取LLM服务配置
+            from app.common.config import cfg
+            from app.core.entities import LLMServiceEnum
+            current_service = cfg.llm_service.value
+            
+            if current_service == LLMServiceEnum.OPENAI:
+                base_url = cfg.openai_api_base.value
+                api_key = cfg.openai_api_key.value
+                llm_model = cfg.openai_model.value
+            elif current_service == LLMServiceEnum.SILICON_CLOUD:
+                base_url = cfg.silicon_cloud_api_base.value
+                api_key = cfg.silicon_cloud_api_key.value
+                llm_model = cfg.silicon_cloud_model.value
+            elif current_service == LLMServiceEnum.DEEPSEEK:
+                base_url = cfg.deepseek_api_base.value
+                api_key = cfg.deepseek_api_key.value
+                llm_model = cfg.deepseek_model.value
+            elif current_service == LLMServiceEnum.OLLAMA:
+                base_url = cfg.ollama_api_base.value
+                api_key = cfg.ollama_api_key.value
+                llm_model = cfg.ollama_model.value
+            elif current_service == LLMServiceEnum.LM_STUDIO:
+                base_url = cfg.lm_studio_api_base.value
+                api_key = cfg.lm_studio_api_key.value
+                llm_model = cfg.lm_studio_model.value
+            elif current_service == LLMServiceEnum.GEMINI:
+                base_url = cfg.gemini_api_base.value
+                api_key = cfg.gemini_api_key.value
+                llm_model = cfg.gemini_model.value
+            elif current_service == LLMServiceEnum.CHATGLM:
+                base_url = cfg.chatglm_api_base.value
+                api_key = cfg.chatglm_api_key.value
+                llm_model = cfg.chatglm_model.value
+            elif current_service == LLMServiceEnum.PUBLIC:
+                base_url = cfg.public_api_base.value
+                api_key = cfg.public_api_key.value
+                llm_model = cfg.public_model.value
+            else:
+                base_url = ""
+                api_key = ""
+                llm_model = ""
+                
+            # 设置OpenAI环境变量
+            import os
+            os.environ["OPENAI_BASE_URL"] = base_url
+            os.environ["OPENAI_API_KEY"] = api_key
+            
+            # 提取字幕文本
+            subtitle_text = "\n".join([seg.text for seg in asr_data.segments])
+            
+            # 生成笔记
+            from pathlib import Path
+            import openai
+            
+            # 创建笔记输出路径
+            notes_path = self.factory.get_notes_path(output_path)
+            
+            # 读取提示词文件内容
+            if prompt_file.exists():
+                prompt = prompt_file.read_text(encoding="utf-8")
+                logger.info("成功读取提示词文件内容")
+            else:
+                # 创建默认提示词文件
+                prompt = """你是一个专业的内容整理助手。请根据提供的字幕内容，生成一份结构化的Markdown笔记。
+
+要求：
+1. 生成清晰的标题结构，使用适当的Markdown标题级别（#, ##, ###等）
+2. 识别并提取关键内容和知识点
+3. 保持内容的连贯性和逻辑结构
+4. 移除重复内容和口头禅
+5. 适当使用Markdown格式增强可读性（如列表、引用、强调等）
+6. 生成的笔记应当完整、系统、有条理
+
+请直接返回Markdown格式的笔记内容，无需包含其他解释。"""
+                prompt_file.write_text(prompt, encoding="utf-8")
+                logger.info(f"创建了默认提示词文件: {prompt_file}")
+            
+            self.task_progress.emit(batch_task.file_path, 60, "正在使用大语言模型生成笔记...")
+            
+            client = openai.OpenAI(
+                base_url=base_url,
+                api_key=api_key
+            )
+            
+            response = client.chat.completions.create(
+                model=llm_model,
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": "字幕内容如下:\n" + subtitle_text +"直接生成markdown格式，不要输出其他多余内容"}
+                ],
+                temperature=0.3
+            )
+            
+            markdown_notes = response.choices[0].message.content
+            
+            # 写入笔记文件
+            with open(notes_path, "w", encoding="utf-8") as f:
+                f.write(markdown_notes)
+                
+            self.task_progress.emit(batch_task.file_path, 100, "笔记生成完成")
+            batch_task.status = BatchTaskStatus.COMPLETED
+            self.task_completed.emit(batch_task.file_path)
+            
+        except Exception as e:
+            logger.exception(f"生成笔记失败: {str(e)}")
+            batch_task.status = BatchTaskStatus.FAILED
+            batch_task.error_message = str(e)
+            self.task_error.emit(batch_task.file_path, str(e))

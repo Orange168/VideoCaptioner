@@ -270,3 +270,18 @@ class TaskFactory:
             file_path=file_path,
             output_path=output_path,
         )
+
+    @staticmethod
+    def get_notes_path(subtitle_path: str) -> str:
+        """获取笔记输出路径
+
+        Args:
+            subtitle_path: 字幕文件路径
+
+        Returns:
+            str: 笔记文件路径
+        """
+        output_name = Path(subtitle_path).stem.replace("【原始字幕】", "").replace("【下载字幕】", "")
+        notes_dir = Path(subtitle_path).parent / "notes"
+        notes_dir.mkdir(parents=True, exist_ok=True)
+        return str(notes_dir / f"{output_name}_notes.md")

@@ -243,8 +243,9 @@ class BatchProcessInterface(QWidget):
 
         # 根据任务类型设置有效的扩展名
         if task_type in [
-            BatchTaskType.TRANSCRIBE,
+            BatchTaskType.TRANSCRIBE, 
             BatchTaskType.TRANS_SUB,
+            BatchTaskType.SUB_NOTE,
             BatchTaskType.FULL_PROCESS,
         ]:
             valid_extensions = {f".{fmt.value}" for fmt in SupportedAudioFormats} | {
