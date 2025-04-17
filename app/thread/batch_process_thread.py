@@ -5,6 +5,9 @@ from pathlib import Path
 import queue
 import time
 from functools import partial
+from string import Template
+from PyQt5.QtCore import QThread, pyqtSignal, Qt, QTime
+
 
 
 from app.core.task_factory import TaskFactory
@@ -474,7 +477,10 @@ class BatchProcessThread(QThread):
             os.environ["OPENAI_API_KEY"] = api_key
             
             # 提取字幕文本
-            subtitle_text = "\n".join([seg.text for seg in asr_data.segments])
+            subtitle_text = ""
+            for seg in asr_data.segments:
+                start_time = QTime(0, 0).addMSecs(seg.start_time).toString("hh:mm:ss.zzz")[:-2]
+                subtitle_text += f"[{start_time}] {seg.text}\n"
             
             # 生成笔记
             from pathlib import Path
@@ -488,20 +494,21 @@ class BatchProcessThread(QThread):
                 prompt = prompt_file.read_text(encoding="utf-8")
                 logger.info("成功读取提示词文件内容")
             else:
+                logger.exception(f"生成笔记失败: {str(e)}")
+                return
                 # 创建默认提示词文件
-                prompt = """你是一个专业的内容整理助手。请根据提供的字幕内容，生成一份结构化的Markdown笔记。
-
+        
+            usr_prompt = """字幕内容如下:${subtitle_text}。
 要求：
-1. 生成清晰的标题结构，使用适当的Markdown标题级别（#, ##, ###等）
-2. 识别并提取关键内容和知识点
+1. 直接生成markdown内容，不用代码块包裹
+2. 不用生多余内容
 3. 保持内容的连贯性和逻辑结构
-4. 移除重复内容和口头禅
-5. 适当使用Markdown格式增强可读性（如列表、引用、强调等）
-6. 生成的笔记应当完整、系统、有条理
 
-请直接返回Markdown格式的笔记内容，无需包含其他解释。"""
-                prompt_file.write_text(prompt, encoding="utf-8")
-                logger.info(f"创建了默认提示词文件: {prompt_file}")
+
+请直接返回Markdown格式的笔记内容（不用代码块），无需包含其他解释。"""
+
+            # 使用Template替换变量
+            usr_prompt = Template(usr_prompt).safe_substitute(subtitle_text=subtitle_text)
             
             self.task_progress.emit(batch_task.file_path, 60, "正在使用大语言模型生成笔记...")
             
@@ -509,12 +516,14 @@ class BatchProcessThread(QThread):
                 base_url=base_url,
                 api_key=api_key
             )
-            
+
+            # logger.info(f"创建了默认提示词文件: {prompt}")
+            logger.info(f"创建了默认提示词文件: {usr_prompt}")
             response = client.chat.completions.create(
                 model=llm_model,
                 messages=[
                     {"role": "system", "content": prompt},
-                    {"role": "user", "content": "字幕内容如下:\n" + subtitle_text +"直接生成markdown格式，不要输出其他多余内容"}
+                    {"role": "user", "content": usr_prompt}
                 ],
                 temperature=0.3
             )
