@@ -74,6 +74,10 @@ class SettingInterface(ScrollArea):
         self.personalGroup = SettingCardGroup(self.tr("个性化"), self.scrollWidget)
         # 关于组
         self.aboutGroup = SettingCardGroup(self.tr("关于"), self.scrollWidget)
+        # 笔记处理LLM配置组
+        self.noteLLMGroup = SettingCardGroup(
+            self.tr("笔记处理LLM配置"), self.scrollWidget
+        )
 
     def __initCards(self):
         """初始化所有配置卡片"""
@@ -219,6 +223,9 @@ class SettingInterface(ScrollArea):
             + VERSION,
             self.aboutGroup,
         )
+
+        # 创建笔记处理LLM服务相关的配置卡片
+        self.__createNoteLLMServiceCards()
 
         # 添加卡片到对应的组
         self.translateGroup.addSettingCard(self.subtitleCorrectCard)
@@ -474,6 +481,162 @@ class SettingInterface(ScrollArea):
             self.translatorServiceCard.comboBox.currentText()
         )
 
+    def __createNoteLLMServiceCards(self):
+        """创建笔记处理LLM服务相关的配置卡片"""
+        # 服务选择卡片
+        self.noteLLMServiceCard = ComboBoxSettingCard(
+            cfg.note_llm_service,
+            FIF.ROBOT,
+            self.tr("笔记处理LLM服务"),
+            self.tr("选择笔记处理LLM服务，如果不选择则使用默认LLM服务"),
+            texts=[service.value for service in cfg.note_llm_service.validator.options],
+            parent=self.noteLLMGroup,
+        )
+
+        # 定义每个服务的配置
+        service_configs = {
+            LLMServiceEnum.OPENAI: {
+                "prefix": "note_openai",
+                "api_key_cfg": cfg.note_openai_api_key,
+                "api_base_cfg": cfg.note_openai_api_base,
+                "model_cfg": cfg.note_openai_model,
+                "default_base": "https://api.openai.com/v1",
+                "default_models": [
+                    "gemini-2.0-flash-exp",
+                    "gpt-4o",
+                    "claude-3-5-sonnet-20241022",
+                ],
+            },
+            LLMServiceEnum.SILICON_CLOUD: {
+                "prefix": "note_silicon_cloud",
+                "api_key_cfg": cfg.note_silicon_cloud_api_key,
+                "api_base_cfg": cfg.note_silicon_cloud_api_base,
+                "model_cfg": cfg.note_silicon_cloud_model,
+                "default_base": "https://api.siliconflow.cn/v1",
+                "default_models": ["gemini-2.0-flash-exp"],
+            },
+            LLMServiceEnum.DEEPSEEK: {
+                "prefix": "note_deepseek",
+                "api_key_cfg": cfg.note_deepseek_api_key,
+                "api_base_cfg": cfg.note_deepseek_api_base,
+                "model_cfg": cfg.note_deepseek_model,
+                "default_base": "https://api.deepseek.com/v1",
+                "default_models": ["deepseek-chat"],
+            },
+            LLMServiceEnum.OLLAMA: {
+                "prefix": "note_ollama",
+                "api_key_cfg": cfg.note_ollama_api_key,
+                "api_base_cfg": cfg.note_ollama_api_base,
+                "model_cfg": cfg.note_ollama_model,
+                "default_base": "http://localhost:11434/v1",
+                "default_models": ["qwen2.5:7b"],
+            },
+            LLMServiceEnum.LM_STUDIO: {
+                "prefix": "note_lm_studio",
+                "api_key_cfg": cfg.note_lm_studio_api_key,
+                "api_base_cfg": cfg.note_lm_studio_api_base,
+                "model_cfg": cfg.note_lm_studio_model,
+                "default_base": "http://localhost:1234/v1",
+                "default_models": ["qwen2.5:7b"],
+            },
+            LLMServiceEnum.GEMINI: {
+                "prefix": "note_gemini",
+                "api_key_cfg": cfg.note_gemini_api_key,
+                "api_base_cfg": cfg.note_gemini_api_base,
+                "model_cfg": cfg.note_gemini_model,
+                "default_base": "https://generativelanguage.googleapis.com/v1beta/openai/",
+                "default_models": ["gemini-2.0-flash-exp"],
+            },
+            LLMServiceEnum.CHATGLM: {
+                "prefix": "note_chatglm",
+                "api_key_cfg": cfg.note_chatglm_api_key,
+                "api_base_cfg": cfg.note_chatglm_api_base,
+                "model_cfg": cfg.note_chatglm_model,
+                "default_base": "https://open.bigmodel.cn/api/paas/v4",
+                "default_models": ["glm-4-flash"],
+            },
+            LLMServiceEnum.PUBLIC: {
+                "prefix": "note_public",
+                "api_key_cfg": cfg.note_public_api_key,
+                "api_base_cfg": cfg.note_public_api_base,
+                "model_cfg": cfg.note_public_model,
+                "default_base": "https://api.public-model.com/v1",
+                "default_models": ["public-model"],
+            },
+        }
+
+        # 创建服务配置映射
+        self.note_llm_service_configs = {}
+
+        # 为每个服务创建配置卡片
+        for service, config in service_configs.items():
+            prefix = config["prefix"]
+
+            # 如果是公益模型，只添加配置不创建卡片
+            if service == LLMServiceEnum.PUBLIC:
+                self.note_llm_service_configs[service] = {
+                    "cards": [],
+                    "api_base": None,
+                    "api_key": None,
+                    "model": None,
+                }
+                continue
+
+            # 创建API Key卡片
+            api_key_card = LineEditSettingCard(
+                config["api_key_cfg"],
+                FIF.FINGERPRINT,
+                self.tr("API Key"),
+                self.tr(f"输入您的 {service.value} API Key"),
+                "sk-" if service != LLMServiceEnum.OLLAMA else "",
+                self.noteLLMGroup,
+            )
+            setattr(self, f"{prefix}_api_key_card", api_key_card)
+
+            # 创建Base URL卡片
+            api_base_card = LineEditSettingCard(
+                config["api_base_cfg"],
+                FIF.LINK,
+                self.tr("Base URL"),
+                self.tr(f"输入 {service.value} Base URL, 需要包含 /v1"),
+                config["default_base"],
+                self.noteLLMGroup,
+            )
+            setattr(self, f"{prefix}_api_base_card", api_base_card)
+
+            # 创建模型选择卡片
+            model_card = EditComboBoxSettingCard(
+                config["model_cfg"],
+                FIF.ROBOT,
+                self.tr("模型"),
+                self.tr(f"选择 {service.value} 模型"),
+                config["default_models"],
+                self.noteLLMGroup,
+            )
+            setattr(self, f"{prefix}_model_card", model_card)
+
+            # 存储服务配置
+            cards = [api_key_card, api_base_card, model_card]
+
+            self.note_llm_service_configs[service] = {
+                "cards": cards,
+                "api_base": api_base_card,
+                "api_key": api_key_card,
+                "model": model_card,
+            }
+
+        # 创建检查连接卡片
+        self.checkNoteLLMConnectionCard = PushSettingCard(
+            self.tr("检查连接"),
+            FIF.LINK,
+            self.tr("检查笔记处理LLM连接"),
+            self.tr("点击检查笔记处理API连接是否正常，并获取模型列表"),
+            self.noteLLMGroup,
+        )
+
+        # 初始化显示状态
+        self.__onNoteLLMServiceChanged(self.noteLLMServiceCard.comboBox.currentText())
+
     def __initWidget(self):
         self.resize(1000, 800)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -524,11 +687,19 @@ class SettingInterface(ScrollArea):
                 self.llmGroup.addSettingCard(card)
         self.llmGroup.addSettingCard(self.checkLLMConnectionCard)
 
+        # 添加笔记处理LLM配置卡片
+        self.noteLLMGroup.addSettingCard(self.noteLLMServiceCard)
+        for config in self.note_llm_service_configs.values():
+            for card in config["cards"]:
+                self.noteLLMGroup.addSettingCard(card)
+        self.noteLLMGroup.addSettingCard(self.checkNoteLLMConnectionCard)
+
         # 将所有组添加到布局
         self.expandLayout.setSpacing(28)
         self.expandLayout.setContentsMargins(36, 10, 36, 0)
         self.expandLayout.addWidget(self.transcribeGroup)
         self.expandLayout.addWidget(self.llmGroup)
+        self.expandLayout.addWidget(self.noteLLMGroup)
         self.expandLayout.addWidget(self.translate_serviceGroup)
         self.expandLayout.addWidget(self.translateGroup)
         self.expandLayout.addWidget(self.subtitleGroup)
@@ -591,6 +762,14 @@ class SettingInterface(ScrollArea):
         )
         self.softSubtitleCard.checkedChanged.connect(signalBus.soft_subtitle_changed)
         self.needVideoCard.checkedChanged.connect(signalBus.need_video_changed)
+
+        # 笔记处理LLM服务切换
+        self.noteLLMServiceCard.comboBox.currentTextChanged.connect(
+            self.__onNoteLLMServiceChanged
+        )
+
+        # 检查笔记处理LLM连接
+        self.checkNoteLLMConnectionCard.clicked.connect(self.checkNoteLLMConnection)
 
     def __showRestartTooltip(self):
         """显示重启提示"""
@@ -762,6 +941,127 @@ class SettingInterface(ScrollArea):
         # 更新布局
         self.translate_serviceGroup.adjustSize()
         self.expandLayout.update()
+
+    def __onNoteLLMServiceChanged(self, service):
+        """处理笔记处理LLM服务切换事件"""
+        current_service = LLMServiceEnum(service)
+
+        # 隐藏所有卡片
+        for config in self.note_llm_service_configs.values():
+            for card in config["cards"]:
+                card.setVisible(False)
+
+        # 显示选中服务的卡片
+        if current_service in self.note_llm_service_configs:
+            for card in self.note_llm_service_configs[current_service]["cards"]:
+                card.setVisible(True)
+
+            # 为OLLAMA和LM_STUDIO设置默认API Key
+            service_config = self.note_llm_service_configs[current_service]
+            if current_service == LLMServiceEnum.OLLAMA and service_config["api_key"]:
+                # 如果API Key为空，设置默认值"ollama"
+                if not service_config["api_key"].lineEdit.text():
+                    service_config["api_key"].lineEdit.setText("ollama")
+            if (
+                current_service == LLMServiceEnum.LM_STUDIO
+                and service_config["api_key"]
+            ):
+                # 如果API Key为空，设置默认值 "lm-studio"
+                if not service_config["api_key"].lineEdit.text():
+                    service_config["api_key"].lineEdit.setText("lm-studio")
+
+        # 更新布局
+        self.noteLLMGroup.adjustSize()
+        self.expandLayout.update()
+
+    def checkNoteLLMConnection(self):
+        """检查笔记处理LLM连接"""
+        # 获取当前选中的服务
+        current_service = LLMServiceEnum(self.noteLLMServiceCard.comboBox.currentText())
+
+        # 获取服务配置
+        service_config = self.note_llm_service_configs.get(current_service)
+        if not service_config:
+            return
+
+        # 如果是公益模型，使用配置文件中的值
+        if current_service == LLMServiceEnum.PUBLIC:
+            api_base = cfg.note_public_api_base.value
+            api_key = cfg.note_public_api_key.value
+            model = cfg.note_public_model.value
+        else:
+            api_base = (
+                service_config["api_base"].lineEdit.text()
+                if service_config["api_base"]
+                else ""
+            )
+            api_key = (
+                service_config["api_key"].lineEdit.text()
+                if service_config["api_key"]
+                else ""
+            )
+            model = (
+                service_config["model"].comboBox.currentText()
+                if service_config["model"]
+                else ""
+            )
+
+        # 检查 API Base 是否属于网址
+        if not api_base.startswith("http"):
+            InfoBar.error(
+                self.tr("错误"),
+                self.tr("请输入正确的 API Base, 含有 /v1"),
+                duration=3000,
+                parent=self,
+            )
+            return
+
+        # 禁用检查按钮，显示加载状态
+        self.checkNoteLLMConnectionCard.button.setEnabled(False)
+        self.checkNoteLLMConnectionCard.button.setText(self.tr("正在检查..."))
+
+        # 创建并启动线程
+        self.note_connection_thread = LLMConnectionThread(api_base, api_key, model)
+        self.note_connection_thread.finished.connect(self.onNoteConnectionCheckFinished)
+        self.note_connection_thread.error.connect(self.onNoteConnectionCheckError)
+        self.note_connection_thread.start()
+
+    def onNoteConnectionCheckError(self, message):
+        """处理笔记处理连接检查错误事件"""
+        self.checkNoteLLMConnectionCard.button.setEnabled(True)
+        self.checkNoteLLMConnectionCard.button.setText(self.tr("检查连接"))
+        InfoBar.error(self.tr("笔记处理LLM连接测试错误"), message, duration=3000, parent=self)
+
+    def onNoteConnectionCheckFinished(self, is_success, message, models):
+        """处理笔记处理连接检查完成事件"""
+        self.checkNoteLLMConnectionCard.button.setEnabled(True)
+        self.checkNoteLLMConnectionCard.button.setText(self.tr("检查连接"))
+
+        # 获取当前服务
+        current_service = LLMServiceEnum(self.noteLLMServiceCard.comboBox.currentText())
+
+        if models:
+            # 更新当前服务的模型列表
+            service_config = self.note_llm_service_configs.get(current_service)
+            if service_config and service_config["model"]:
+                temp = service_config["model"].comboBox.currentText()
+                service_config["model"].setItems(models)
+                service_config["model"].comboBox.setCurrentText(temp)
+
+            InfoBar.success(
+                self.tr("获取模型列表成功:"),
+                self.tr("一共") + str(len(models)) + self.tr("个模型"),
+                duration=3000,
+                parent=self,
+            )
+        if not is_success:
+            InfoBar.error(
+                self.tr("笔记处理LLM连接测试错误"), message, duration=3000, parent=self
+            )
+        else:
+            InfoBar.success(
+                self.tr("笔记处理LLM连接测试成功"), message, duration=3000, parent=self
+            )
 
 
 class LLMConnectionThread(QThread):

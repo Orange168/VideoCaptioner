@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
-<TS version="2.1">
+<TS version="2.1" language="en_US">
 <context>
     <name>BatchProcessInterface</name>
     <message>
@@ -1277,6 +1277,76 @@ Note: When using a small LLM model, it is recommended to keep the script within 
         <location filename="../../app/view/setting_interface.py" line="664"/>
         <source>个模型</source>
         <translation>models</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="60"/>
+        <source>笔记处理LLM配置</source>
+        <translation>Note Processing LLM Configuration</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="247"/>
+        <source>笔记处理LLM服务</source>
+        <translation>Note Processing LLM Service</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="247"/>
+        <source>选择笔记处理LLM服务，如果不选择则使用默认LLM服务</source>
+        <translation>Select a note processing LLM service. If not selected, the default LLM service will be used</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="349"/>
+        <source>检查笔记处理LLM连接</source>
+        <translation>Check Note Processing LLM Connection</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="349"/>
+        <source>点击检查笔记处理API连接是否正常，并获取模型列表</source>
+        <translation>Click to check if the note processing API connection is working properly and get the model list</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="349"/>
+        <source>笔记处理LLM连接测试错误</source>
+        <translation>Note Processing LLM Connection Test Error</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="349"/>
+        <source>笔记处理LLM连接测试成功</source>
+        <translation>Note Processing LLM Connection Test Successful</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="195"/>
+        <source>打开帮助页面</source>
+        <translation>Open Help Page</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="60"/>
+        <source>笔记处理 LLM 配置</source>
+        <translation>Note Processing LLM Configuration</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="247"/>
+        <source>服务选择</source>
+        <translation>Service Selection</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="349"/>
+        <source>检查连接</source>
+        <translation>Check Connection</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="350"/>
+        <source>连接测试结果</source>
+        <translation>Connection Test Result</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="351"/>
+        <source>连接成功</source>
+        <translation>Connection Successful</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="352"/>
+        <source>连接失败</source>
+        <translation>Connection Failed</translation>
     </message>
 </context>
 <context>

@@ -73,6 +73,70 @@ class Config(QConfig):
         EnumSerializer(LLMServiceEnum),
     )
 
+    # 笔记处理的LLM配置
+    note_llm_service = OptionsConfigItem(
+        "NoteLLM",
+        "LLMService",
+        LLMServiceEnum.PUBLIC,
+        OptionsValidator(LLMServiceEnum),
+        EnumSerializer(LLMServiceEnum),
+    )
+
+    # 笔记处理的OpenAI配置
+    note_openai_model = ConfigItem("NoteLLM", "OpenAI_Model", "gemini-2.0-flash-exp")
+    note_openai_api_key = ConfigItem("NoteLLM", "OpenAI_API_Key", "")
+    note_openai_api_base = ConfigItem("NoteLLM", "OpenAI_API_Base", "https://api.openai.com/v1")
+
+    # 笔记处理的SiliconCloud配置
+    note_silicon_cloud_model = ConfigItem("NoteLLM", "SiliconCloud_Model", "gemini-2.0-flash-exp")
+    note_silicon_cloud_api_key = ConfigItem("NoteLLM", "SiliconCloud_API_Key", "")
+    note_silicon_cloud_api_base = ConfigItem(
+        "NoteLLM", "SiliconCloud_API_Base", "https://api.siliconflow.cn/v1"
+    )
+
+    # 笔记处理的DeepSeek配置
+    note_deepseek_model = ConfigItem("NoteLLM", "DeepSeek_Model", "deepseek-chat")
+    note_deepseek_api_key = ConfigItem("NoteLLM", "DeepSeek_API_Key", "")
+    note_deepseek_api_base = ConfigItem(
+        "NoteLLM", "DeepSeek_API_Base", "https://api.deepseek.com/v1"
+    )
+
+    # 笔记处理的Ollama配置
+    note_ollama_model = ConfigItem("NoteLLM", "Ollama_Model", "llama2")
+    note_ollama_api_key = ConfigItem("NoteLLM", "Ollama_API_Key", "ollama")
+    note_ollama_api_base = ConfigItem("NoteLLM", "Ollama_API_Base", "http://localhost:11434/v1")
+
+    # 笔记处理的LM Studio配置
+    note_lm_studio_model = ConfigItem("NoteLLM", "LmStudio_Model", "qwen2.5:7b")
+    note_lm_studio_api_key = ConfigItem("NoteLLM", "LmStudio_API_Key", "lmstudio")
+    note_lm_studio_api_base = ConfigItem(
+        "NoteLLM", "LmStudio_API_Base", "http://localhost:1234/v1"
+    )
+
+    # 笔记处理的Gemini配置
+    note_gemini_model = ConfigItem("NoteLLM", "Gemini_Model", "gemini-2.0-flash-exp")
+    note_gemini_api_key = ConfigItem("NoteLLM", "Gemini_API_Key", "")
+    note_gemini_api_base = ConfigItem(
+        "NoteLLM",
+        "Gemini_API_Base",
+        "https://generativelanguage.googleapis.com/v1beta/openai/",
+    )
+
+    # 笔记处理的ChatGLM配置
+    note_chatglm_model = ConfigItem("NoteLLM", "ChatGLM_Model", "glm-4")
+    note_chatglm_api_key = ConfigItem("NoteLLM", "ChatGLM_API_Key", "")
+    note_chatglm_api_base = ConfigItem(
+        "NoteLLM", "ChatGLM_API_Base", "https://open.bigmodel.cn/api/paas/v4"
+    )
+
+    # 笔记处理的公益模型配置
+    note_public_model = ConfigItem("NoteLLM", "Public_Model", "gpt-4o-mini")
+    note_public_api_key = ConfigItem(
+        "NoteLLM", "Public_API_Key", "please-do-not-use-for-personal-purposes"
+    )
+    note_public_api_base = ConfigItem("NoteLLM", "Public_API_Base", "https://ddg.bkfeng.top/v1")
+
+    # 原有的OpenAI配置
     openai_model = ConfigItem("LLM", "OpenAI_Model", "gpt-4o-mini")
     openai_api_key = ConfigItem("LLM", "OpenAI_API_Key", "")
     openai_api_base = ConfigItem("LLM", "OpenAI_API_Base", "https://api.openai.com/v1")

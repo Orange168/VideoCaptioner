@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
-<TS version="2.1">
+<TS version="2.1" language="zh_HK">
 <context>
     <name>BatchProcessInterface</name>
     <message>
@@ -945,6 +945,41 @@
         <location filename="../../app/view/setting_interface.py" line="675"/>
         <source>LLM 连接测试成功</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="60"/>
+        <source>笔记处理LLM配置</source>
+        <translation>筆記處理LLM配置</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="247"/>
+        <source>笔记处理LLM服务</source>
+        <translation>筆記處理LLM服務</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="247"/>
+        <source>选择笔记处理LLM服务，如果不选择则使用默认LLM服务</source>
+        <translation>選擇筆記處理LLM服務，如果不選擇則使用默認LLM服務</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="349"/>
+        <source>检查笔记处理LLM连接</source>
+        <translation>檢查筆記處理LLM連接</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="349"/>
+        <source>点击检查笔记处理API连接是否正常，并获取模型列表</source>
+        <translation>點擊檢查筆記處理API連接是否正常，並獲取模型列表</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="349"/>
+        <source>笔记处理LLM连接测试错误</source>
+        <translation>筆記處理LLM連接測試錯誤</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="349"/>
+        <source>笔记处理LLM连接测试成功</source>
+        <translation>筆記處理LLM連接測試成功</translation>
     </message>
 </context>
 <context>

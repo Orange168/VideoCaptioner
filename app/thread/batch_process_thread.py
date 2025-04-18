@@ -404,8 +404,133 @@ class BatchProcessThread(QThread):
         self, batch_task: BatchTask, progress: int, message: str
     ):
         """字幕+笔记任务进度包装器"""
-        progress = progress // 2  # 转录占50%进度
-        self.task_progress.emit(batch_task.file_path, progress, message)
+        
+        try:
+            # 获取字幕内容
+            from app.core.bk_asr.asr_data import ASRData
+            output_path = task.output_path
+            asr_data = ASRData.from_subtitle_file(output_path)
+            
+            # 获取LLM服务配置
+            from app.common.config import cfg
+            from app.core.entities import LLMServiceEnum
+            
+            # 优先使用笔记处理的LLM配置
+            current_service = cfg.note_llm_service.value
+            
+            # 如果笔记处理的LLM配置为空，则使用默认的LLM配置
+            if not current_service:
+                current_service = cfg.llm_service.value
+            
+            if current_service == LLMServiceEnum.OPENAI:
+                base_url = cfg.note_openai_api_base.value or cfg.openai_api_base.value
+                api_key = cfg.note_openai_api_key.value or cfg.openai_api_key.value
+                llm_model = cfg.note_openai_model.value or cfg.openai_model.value
+            elif current_service == LLMServiceEnum.SILICON_CLOUD:
+                base_url = cfg.note_silicon_cloud_api_base.value or cfg.silicon_cloud_api_base.value
+                api_key = cfg.note_silicon_cloud_api_key.value or cfg.silicon_cloud_api_key.value
+                llm_model = cfg.note_silicon_cloud_model.value or cfg.silicon_cloud_model.value
+            elif current_service == LLMServiceEnum.DEEPSEEK:
+                base_url = cfg.note_deepseek_api_base.value or cfg.deepseek_api_base.value
+                api_key = cfg.note_deepseek_api_key.value or cfg.deepseek_api_key.value
+                llm_model = cfg.note_deepseek_model.value or cfg.deepseek_model.value
+            elif current_service == LLMServiceEnum.OLLAMA:
+                base_url = cfg.note_ollama_api_base.value or cfg.ollama_api_base.value
+                api_key = cfg.note_ollama_api_key.value or cfg.ollama_api_key.value
+                llm_model = cfg.note_ollama_model.value or cfg.ollama_model.value
+            elif current_service == LLMServiceEnum.LM_STUDIO:
+                base_url = cfg.note_lm_studio_api_base.value or cfg.lm_studio_api_base.value
+                api_key = cfg.note_lm_studio_api_key.value or cfg.lm_studio_api_key.value
+                llm_model = cfg.note_lm_studio_model.value or cfg.lm_studio_model.value
+            elif current_service == LLMServiceEnum.GEMINI:
+                base_url = cfg.note_gemini_api_base.value or cfg.gemini_api_base.value
+                api_key = cfg.note_gemini_api_key.value or cfg.gemini_api_key.value
+                llm_model = cfg.note_gemini_model.value or cfg.gemini_model.value
+            elif current_service == LLMServiceEnum.CHATGLM:
+                base_url = cfg.note_chatglm_api_base.value or cfg.chatglm_api_base.value
+                api_key = cfg.note_chatglm_api_key.value or cfg.chatglm_api_key.value
+                llm_model = cfg.note_chatglm_model.value or cfg.chatglm_model.value
+            elif current_service == LLMServiceEnum.PUBLIC:
+                base_url = cfg.note_public_api_base.value or cfg.public_api_base.value
+                api_key = cfg.note_public_api_key.value or cfg.public_api_key.value
+                llm_model = cfg.note_public_model.value or cfg.public_model.value
+            else:
+                base_url = ""
+                api_key = ""
+                llm_model = ""
+                
+            # 设置OpenAI环境变量
+            import os
+            os.environ["OPENAI_BASE_URL"] = base_url
+            os.environ["OPENAI_API_KEY"] = api_key
+            
+            # 提取字幕文本
+            subtitle_text = ""
+            for seg in asr_data.segments:
+                start_time = QTime(0, 0).addMSecs(seg.start_time).toString("hh:mm:ss.zzz")[:-2]
+                subtitle_text += f"[{start_time}] {seg.text}\n"
+            
+            # 生成笔记
+            from pathlib import Path
+            import openai
+            
+            # 创建笔记输出路径
+            notes_path = self.factory.get_notes_path(output_path)
+            
+            # 读取提示词文件内容
+            if prompt_file.exists():
+                prompt = prompt_file.read_text(encoding="utf-8")
+                logger.info("成功读取提示词文件内容")
+            else:
+                logger.exception(f"生成笔记失败: {str(e)}")
+                return
+                # 创建默认提示词文件
+        
+            usr_prompt = """字幕内容如下:${subtitle_text}。
+要求：
+1. 直接生成markdown内容，不用代码块包裹
+2. 不用生多余内容
+3. 保持内容的连贯性和逻辑结构
+
+
+请直接返回Markdown格式的笔记内容（不用代码块），无需包含其他解释。"""
+
+            # 使用Template替换变量
+            usr_prompt = Template(usr_prompt).safe_substitute(subtitle_text=subtitle_text)
+            
+            self.task_progress.emit(batch_task.file_path, 60, "正在使用大语言模型生成笔记...")
+            
+            client = openai.OpenAI(
+                base_url=base_url,
+                api_key=api_key
+            )
+
+            # logger.info(f"创建了默认提示词文件: {prompt}")
+            logger.info(f"创建了默认提示词文件: {usr_prompt}")
+            response = client.chat.completions.create(
+                model=llm_model,
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": usr_prompt}
+                ],
+                temperature=0.3
+            )
+            
+            markdown_notes = response.choices[0].message.content
+            
+            # 写入笔记文件
+            with open(notes_path, "w", encoding="utf-8") as f:
+                f.write(markdown_notes)
+                
+            self.task_progress.emit(batch_task.file_path, 100, "笔记生成完成")
+            batch_task.status = BatchTaskStatus.COMPLETED
+            self.task_completed.emit(batch_task.file_path)
+            
+        except Exception as e:
+            logger.exception(f"生成笔记失败: {str(e)}")
+            batch_task.status = BatchTaskStatus.FAILED
+            batch_task.error_message = str(e)
+            self.task_error.emit(batch_task.file_path, str(e))
 
     def _on_sub_note_finished_wrapper(
         self, batch_task: BatchTask, task: TranscribeTask

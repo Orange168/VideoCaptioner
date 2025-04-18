@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
-<TS version="2.1">
+<TS version="2.1" language="zh_CN">
 <context>
     <name>BatchProcessInterface</name>
     <message>
@@ -850,13 +850,13 @@
     </message>
     <message>
         <location filename="../../app/view/setting_interface.py" line="247"/>
-        <source>LLM服务</source>
-        <translation type="unfinished"></translation>
+        <source>笔记处理LLM服务</source>
+        <translation>笔记处理LLM服务</translation>
     </message>
     <message>
         <location filename="../../app/view/setting_interface.py" line="247"/>
-        <source>选择LLM服务</source>
-        <translation type="unfinished"></translation>
+        <source>选择笔记处理LLM服务，如果不选择则使用默认LLM服务</source>
+        <translation>选择笔记处理LLM服务，如果不选择则使用默认LLM服务</translation>
     </message>
     <message>
         <location filename="../../app/view/setting_interface.py" line="338"/>
@@ -865,13 +865,23 @@
     </message>
     <message>
         <location filename="../../app/view/setting_interface.py" line="349"/>
-        <source>Base URL</source>
-        <translation type="unfinished"></translation>
+        <source>检查笔记处理LLM连接</source>
+        <translation>检查笔记处理LLM连接</translation>
     </message>
     <message>
         <location filename="../../app/view/setting_interface.py" line="349"/>
-        <source>输入 {service.value} Base URL, 需要包含 /v1</source>
-        <translation type="unfinished"></translation>
+        <source>点击检查笔记处理API连接是否正常，并获取模型列表</source>
+        <translation>点击检查笔记处理API连接是否正常，并获取模型列表</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="349"/>
+        <source>笔记处理LLM连接测试错误</source>
+        <translation>笔记处理LLM连接测试错误</translation>
+    </message>
+    <message>
+        <location filename="../../app/view/setting_interface.py" line="349"/>
+        <source>笔记处理LLM连接测试成功</source>
+        <translation>笔记处理LLM连接测试成功</translation>
     </message>
     <message>
         <location filename="../../app/view/setting_interface.py" line="360"/>
