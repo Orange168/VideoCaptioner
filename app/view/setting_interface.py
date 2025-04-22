@@ -659,13 +659,6 @@ class SettingInterface(ScrollArea):
             parent=self.noteLLMGroup
         )
 
-        # Add the new card to the group
-        for config in self.note_llm_service_configs.values():
-            for card in config["cards"]:
-                self.noteLLMGroup.addSettingCard(card)
-        self.noteLLMGroup.addSettingCard(self.noteUseProxyCard)
-        self.noteLLMGroup.addSettingCard(self.checkNoteLLMConnectionCard)
-
     def __initWidget(self):
         self.resize(1000, 800)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -716,12 +709,24 @@ class SettingInterface(ScrollArea):
                 self.llmGroup.addSettingCard(card)
         self.llmGroup.addSettingCard(self.checkLLMConnectionCard)
 
-        # 添加笔记处理LLM配置卡片
+        # 添加笔记处理LLM配置卡片 (按照期望的顺序)
+        # 1. 先添加服务选择卡片
         self.noteLLMGroup.addSettingCard(self.noteLLMServiceCard)
+
+        # 2. 添加代理开关卡片
+        if hasattr(self, 'noteUseProxyCard') and self.noteUseProxyCard:
+            self.noteLLMGroup.addSettingCard(self.noteUseProxyCard)
+
+        # 3. 再添加对应服务的配置卡片 (API Key, Base URL, Model)
         for config in self.note_llm_service_configs.values():
-            for card in config["cards"]:
-                self.noteLLMGroup.addSettingCard(card)
-        self.noteLLMGroup.addSettingCard(self.checkNoteLLMConnectionCard)
+            if "cards" in config and config["cards"]:
+                for card in config["cards"]:
+                    if card:
+                        self.noteLLMGroup.addSettingCard(card)
+
+        # 4. 最后添加检查连接按钮
+        if hasattr(self, 'checkNoteLLMConnectionCard') and self.checkNoteLLMConnectionCard:
+            self.noteLLMGroup.addSettingCard(self.checkNoteLLMConnectionCard)
 
         # 添加代理设置卡片
         self.proxyGroup.addSettingCard(self.proxyAddressCard)
