@@ -1,4 +1,5 @@
 import webbrowser
+import os
 
 from PyQt5.QtCore import Qt, QThread, QUrl, pyqtSignal
 from PyQt5.QtGui import QDesktopServices
@@ -29,8 +30,8 @@ from app.core.entities import LLMServiceEnum, TranscribeModelEnum, TranslatorSer
 from app.core.utils.test_opanai import get_openai_models, test_openai
 from app.thread.version_manager_thread import VersionManager
 from app.components.MySettingCard import ComboBoxSettingCard as MyComboBoxSettingCard
-
-
+from app.core.utils import logger
+logger = logger.setup_logger("SettingInterface")
 class SettingInterface(ScrollArea):
     """设置界面"""
 
@@ -74,6 +75,9 @@ class SettingInterface(ScrollArea):
         self.personalGroup = SettingCardGroup(self.tr("个性化"), self.scrollWidget)
         # 关于组
         self.aboutGroup = SettingCardGroup(self.tr("关于"), self.scrollWidget)
+                # 代理设置组
+        self.proxyGroup = SettingCardGroup(self.tr("代理设置"), self.scrollWidget)
+
         # 笔记处理LLM配置组
         self.noteLLMGroup = SettingCardGroup(
             self.tr("笔记处理LLM配置"), self.scrollWidget
@@ -223,6 +227,13 @@ class SettingInterface(ScrollArea):
             + VERSION,
             self.aboutGroup,
         )
+        self.proxyAddressCard = LineEditSettingCard(
+            cfg.proxy_address,
+            FIF.LINK,
+            self.tr("代理地址"),
+            self.tr("输入代理服务器地址，例如 http://127.0.0.1:1080"),
+            parent=self.proxyGroup
+        )
 
         # 创建笔记处理LLM服务相关的配置卡片
         self.__createNoteLLMServiceCards()
@@ -231,6 +242,8 @@ class SettingInterface(ScrollArea):
         self.translateGroup.addSettingCard(self.subtitleCorrectCard)
         self.translateGroup.addSettingCard(self.subtitleTranslateCard)
         self.translateGroup.addSettingCard(self.targetLanguageCard)
+        # 代理设置卡片
+        self.proxyGroup.addSettingCard(self.proxyAddressCard)
 
         self.subtitleGroup.addSettingCard(self.subtitleStyleCard)
         self.subtitleGroup.addSettingCard(self.subtitleLayoutCard)
@@ -637,6 +650,22 @@ class SettingInterface(ScrollArea):
         # 初始化显示状态
         self.__onNoteLLMServiceChanged(self.noteLLMServiceCard.comboBox.currentText())
 
+        # Add Note Use Proxy Switch
+        self.noteUseProxyCard = SwitchSettingCard(
+            FIF.LINK,
+            self.tr("使用代理"),
+            self.tr("是否为笔记处理的LLM请求启用代理（当前仅对Gemini生效）"),
+            cfg.note_use_proxy,
+            parent=self.noteLLMGroup
+        )
+
+        # Add the new card to the group
+        for config in self.note_llm_service_configs.values():
+            for card in config["cards"]:
+                self.noteLLMGroup.addSettingCard(card)
+        self.noteLLMGroup.addSettingCard(self.noteUseProxyCard)
+        self.noteLLMGroup.addSettingCard(self.checkNoteLLMConnectionCard)
+
     def __initWidget(self):
         self.resize(1000, 800)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -694,18 +723,23 @@ class SettingInterface(ScrollArea):
                 self.noteLLMGroup.addSettingCard(card)
         self.noteLLMGroup.addSettingCard(self.checkNoteLLMConnectionCard)
 
+        # 添加代理设置卡片
+        self.proxyGroup.addSettingCard(self.proxyAddressCard)
+
         # 将所有组添加到布局
         self.expandLayout.setSpacing(28)
         self.expandLayout.setContentsMargins(36, 10, 36, 0)
         self.expandLayout.addWidget(self.transcribeGroup)
         self.expandLayout.addWidget(self.llmGroup)
         self.expandLayout.addWidget(self.noteLLMGroup)
+        self.expandLayout.addWidget(self.proxyGroup)
         self.expandLayout.addWidget(self.translate_serviceGroup)
         self.expandLayout.addWidget(self.translateGroup)
         self.expandLayout.addWidget(self.subtitleGroup)
         self.expandLayout.addWidget(self.saveGroup)
         self.expandLayout.addWidget(self.personalGroup)
         self.expandLayout.addWidget(self.aboutGroup)
+        
 
     def __connectSignalToSlot(self):
         """连接信号与槽"""
@@ -992,17 +1026,17 @@ class SettingInterface(ScrollArea):
         else:
             api_base = (
                 service_config["api_base"].lineEdit.text()
-                if service_config["api_base"]
+                if service_config.get("api_base")
                 else ""
             )
             api_key = (
                 service_config["api_key"].lineEdit.text()
-                if service_config["api_key"]
+                if service_config.get("api_key")
                 else ""
             )
             model = (
                 service_config["model"].comboBox.currentText()
-                if service_config["model"]
+                if service_config.get("model")
                 else ""
             )
 
@@ -1020,8 +1054,15 @@ class SettingInterface(ScrollArea):
         self.checkNoteLLMConnectionCard.button.setEnabled(False)
         self.checkNoteLLMConnectionCard.button.setText(self.tr("正在检查..."))
 
-        # 创建并启动线程
-        self.note_connection_thread = LLMConnectionThread(api_base, api_key, model)
+        # Determine proxy settings for the thread
+        is_gemini = (current_service == LLMServiceEnum.GEMINI)
+        use_proxy = cfg.note_use_proxy.value
+        proxy_addr = cfg.proxy_address.value
+
+        # 创建并启动线程, 传递代理信息
+        self.note_connection_thread = LLMConnectionThread(
+            api_base, api_key, model, is_gemini, use_proxy, proxy_addr
+        )
         self.note_connection_thread.finished.connect(self.onNoteConnectionCheckFinished)
         self.note_connection_thread.error.connect(self.onNoteConnectionCheckError)
         self.note_connection_thread.start()
@@ -1068,17 +1109,48 @@ class LLMConnectionThread(QThread):
     finished = pyqtSignal(bool, str, list)
     error = pyqtSignal(str)
 
-    def __init__(self, api_base, api_key, model):
+    def __init__(self, api_base, api_key, model, is_gemini=False, use_proxy=False, proxy_address=None):
         super().__init__()
         self.api_base = api_base
         self.api_key = api_key
         self.model = model
+        self.is_gemini = is_gemini
+        self.use_proxy = use_proxy
+        self.proxy_address = proxy_address
 
     def run(self):
-        """检查 LLM 连接并获取模型列表"""
+        """检查 LLM 连接并获取模型列表，根据需要应用代理"""
+        original_http_proxy = os.environ.get('HTTP_PROXY')
+        original_https_proxy = os.environ.get('HTTPS_PROXY')
+        proxy_was_set = False
         try:
+            # Conditionally set proxy ONLY for Gemini if enabled
+            if self.is_gemini and self.use_proxy and self.proxy_address:
+                logger.info(f"LLM 测试: 使用代理 ({self.proxy_address}) for Gemini API call.")
+                os.environ['HTTP_PROXY'] = self.proxy_address
+                os.environ['HTTPS_PROXY'] = self.proxy_address
+                proxy_was_set = True
+            else:
+                 logger.info(f"LLM 测试: 不使用代理 (Gemini: {self.is_gemini}, UseProxy: {self.use_proxy})")
+
+            # Perform the checks
             is_success, message = test_openai(self.api_base, self.api_key, self.model)
             models = get_openai_models(self.api_base, self.api_key)
             self.finished.emit(is_success, message, models)
+
         except Exception as e:
+            logger.exception(f"LLM 连接测试线程出错: {e}")
             self.error.emit(str(e))
+        finally:
+            # Restore original proxy settings if they were changed
+            if proxy_was_set:
+                logger.info("LLM 测试: 恢复原始代理设置.")
+                if original_http_proxy is None:
+                    if 'HTTP_PROXY' in os.environ: del os.environ['HTTP_PROXY']
+                else:
+                    os.environ['HTTP_PROXY'] = original_http_proxy
+
+                if original_https_proxy is None:
+                    if 'HTTPS_PROXY' in os.environ: del os.environ['HTTPS_PROXY']
+                else:
+                    os.environ['HTTPS_PROXY'] = original_https_proxy
