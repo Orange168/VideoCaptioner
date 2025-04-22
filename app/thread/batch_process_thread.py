@@ -7,8 +7,8 @@ import time
 from functools import partial
 from string import Template
 from PyQt5.QtCore import QThread, pyqtSignal, Qt, QTime
-
-
+import openai
+import os
 
 from app.core.task_factory import TaskFactory
 from app.core.entities import (
@@ -403,134 +403,10 @@ class BatchProcessThread(QThread):
     def _on_sub_note_progress_wrapper(
         self, batch_task: BatchTask, progress: int, message: str
     ):
-        """字幕+笔记任务进度包装器"""
-        
-        try:
-            # 获取字幕内容
-            from app.core.bk_asr.asr_data import ASRData
-            output_path = task.output_path
-            asr_data = ASRData.from_subtitle_file(output_path)
-            
-            # 获取LLM服务配置
-            from app.common.config import cfg
-            from app.core.entities import LLMServiceEnum
-            
-            # 优先使用笔记处理的LLM配置
-            current_service = cfg.note_llm_service.value
-            
-            # 如果笔记处理的LLM配置为空，则使用默认的LLM配置
-            if not current_service:
-                current_service = cfg.llm_service.value
-            
-            if current_service == LLMServiceEnum.OPENAI:
-                base_url = cfg.note_openai_api_base.value or cfg.openai_api_base.value
-                api_key = cfg.note_openai_api_key.value or cfg.openai_api_key.value
-                llm_model = cfg.note_openai_model.value or cfg.openai_model.value
-            elif current_service == LLMServiceEnum.SILICON_CLOUD:
-                base_url = cfg.note_silicon_cloud_api_base.value or cfg.silicon_cloud_api_base.value
-                api_key = cfg.note_silicon_cloud_api_key.value or cfg.silicon_cloud_api_key.value
-                llm_model = cfg.note_silicon_cloud_model.value or cfg.silicon_cloud_model.value
-            elif current_service == LLMServiceEnum.DEEPSEEK:
-                base_url = cfg.note_deepseek_api_base.value or cfg.deepseek_api_base.value
-                api_key = cfg.note_deepseek_api_key.value or cfg.deepseek_api_key.value
-                llm_model = cfg.note_deepseek_model.value or cfg.deepseek_model.value
-            elif current_service == LLMServiceEnum.OLLAMA:
-                base_url = cfg.note_ollama_api_base.value or cfg.ollama_api_base.value
-                api_key = cfg.note_ollama_api_key.value or cfg.ollama_api_key.value
-                llm_model = cfg.note_ollama_model.value or cfg.ollama_model.value
-            elif current_service == LLMServiceEnum.LM_STUDIO:
-                base_url = cfg.note_lm_studio_api_base.value or cfg.lm_studio_api_base.value
-                api_key = cfg.note_lm_studio_api_key.value or cfg.lm_studio_api_key.value
-                llm_model = cfg.note_lm_studio_model.value or cfg.lm_studio_model.value
-            elif current_service == LLMServiceEnum.GEMINI:
-                base_url = cfg.note_gemini_api_base.value or cfg.gemini_api_base.value
-                api_key = cfg.note_gemini_api_key.value or cfg.gemini_api_key.value
-                llm_model = cfg.note_gemini_model.value or cfg.gemini_model.value
-            elif current_service == LLMServiceEnum.CHATGLM:
-                base_url = cfg.note_chatglm_api_base.value or cfg.chatglm_api_base.value
-                api_key = cfg.note_chatglm_api_key.value or cfg.chatglm_api_key.value
-                llm_model = cfg.note_chatglm_model.value or cfg.chatglm_model.value
-            elif current_service == LLMServiceEnum.PUBLIC:
-                base_url = cfg.note_public_api_base.value or cfg.public_api_base.value
-                api_key = cfg.note_public_api_key.value or cfg.public_api_key.value
-                llm_model = cfg.note_public_model.value or cfg.public_model.value
-            else:
-                base_url = ""
-                api_key = ""
-                llm_model = ""
-                
-            # 设置OpenAI环境变量
-            import os
-            os.environ["OPENAI_BASE_URL"] = base_url
-            os.environ["OPENAI_API_KEY"] = api_key
-            
-            # 提取字幕文本
-            subtitle_text = ""
-            for seg in asr_data.segments:
-                start_time = QTime(0, 0).addMSecs(seg.start_time).toString("hh:mm:ss.zzz")[:-2]
-                subtitle_text += f"[{start_time}] {seg.text}\n"
-            
-            # 生成笔记
-            from pathlib import Path
-            import openai
-            
-            # 创建笔记输出路径
-            notes_path = self.factory.get_notes_path(output_path)
-            
-            # 读取提示词文件内容
-            if prompt_file.exists():
-                prompt = prompt_file.read_text(encoding="utf-8")
-                logger.info("成功读取提示词文件内容")
-            else:
-                logger.exception(f"生成笔记失败: {str(e)}")
-                return
-                # 创建默认提示词文件
-        
-            usr_prompt = """字幕内容如下:${subtitle_text}。
-要求：
-1. 直接生成markdown内容，不用代码块包裹
-2. 不用生多余内容
-3. 保持内容的连贯性和逻辑结构
-
-
-请直接返回Markdown格式的笔记内容（不用代码块），无需包含其他解释。"""
-
-            # 使用Template替换变量
-            usr_prompt = Template(usr_prompt).safe_substitute(subtitle_text=subtitle_text)
-            
-            self.task_progress.emit(batch_task.file_path, 60, "正在使用大语言模型生成笔记...")
-            
-            client = openai.OpenAI(
-                base_url=base_url,
-                api_key=api_key
-            )
-
-            # logger.info(f"创建了默认提示词文件: {prompt}")
-            logger.info(f"创建了默认提示词文件: {usr_prompt}")
-            response = client.chat.completions.create(
-                model=llm_model,
-                messages=[
-                    {"role": "system", "content": prompt},
-                    {"role": "user", "content": usr_prompt}
-                ],
-                temperature=0.3
-            )
-            
-            markdown_notes = response.choices[0].message.content
-            
-            # 写入笔记文件
-            with open(notes_path, "w", encoding="utf-8") as f:
-                f.write(markdown_notes)
-                
-            self.task_progress.emit(batch_task.file_path, 100, "笔记生成完成")
-            batch_task.status = BatchTaskStatus.COMPLETED
-            self.task_completed.emit(batch_task.file_path)
-            
-        except Exception as e:
-            logger.exception(f"生成笔记失败: {str(e)}")
-            batch_task.status = BatchTaskStatus.FAILED
-            batch_task.error_message = str(e)
-            self.task_error.emit(batch_task.file_path, str(e))
+        """字幕+笔记任务进度包装器 - 只处理转录进度"""
+        # 转录占总进度的50%
+        progress_value = progress // 2
+        self.task_progress.emit(batch_task.file_path, progress_value, message)
 
     def _on_sub_note_finished_wrapper(
         self, batch_task: BatchTask, task: TranscribeTask
@@ -545,126 +421,203 @@ class BatchProcessThread(QThread):
         prompt_file = Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) / "promt_notes.md"
         logger.info(f"提示词文件位置: {prompt_file}")
         logger.info(f"可通过编辑该文件自定义笔记生成效果，文件中使用{{subtitle_text}}作为字幕内容占位符")
-        
-        self.task_progress.emit(batch_task.file_path, 50, "正在生成笔记...")
-        
+
+        self.task_progress.emit(batch_task.file_path, 50, "转录完成，正在生成笔记...") # Emit 50% progress
+
+        original_http_proxy = os.environ.get('HTTP_PROXY')
+        original_https_proxy = os.environ.get('HTTPS_PROXY')
+        proxy_set_for_gemini = False
+
         try:
             # 获取字幕内容
             from app.core.bk_asr.asr_data import ASRData
             output_path = task.output_path
+            if not Path(output_path).exists():
+                raise FileNotFoundError(f"Subtitle file not found at {output_path}")
             asr_data = ASRData.from_subtitle_file(output_path)
-            
+
             # 获取LLM服务配置
             from app.common.config import cfg
             from app.core.entities import LLMServiceEnum
-            current_service = cfg.llm_service.value
-            
+
+            # 优先使用笔记处理的LLM配置
+            current_service = cfg.note_llm_service.value
+
+            # 如果笔记处理的LLM配置为空，则使用默认的LLM配置
+            if not current_service:
+                current_service = cfg.llm_service.value
+
             if current_service == LLMServiceEnum.OPENAI:
-                base_url = cfg.openai_api_base.value
-                api_key = cfg.openai_api_key.value
-                llm_model = cfg.openai_model.value
+                base_url = cfg.note_openai_api_base.value or cfg.openai_api_base.value
+                api_key = cfg.note_openai_api_key.value or cfg.openai_api_key.value
+                llm_model = cfg.note_openai_model.value or cfg.openai_model.value
             elif current_service == LLMServiceEnum.SILICON_CLOUD:
-                base_url = cfg.silicon_cloud_api_base.value
-                api_key = cfg.silicon_cloud_api_key.value
-                llm_model = cfg.silicon_cloud_model.value
+                base_url = cfg.note_silicon_cloud_api_base.value or cfg.silicon_cloud_api_base.value
+                api_key = cfg.note_silicon_cloud_api_key.value or cfg.silicon_cloud_api_key.value
+                llm_model = cfg.note_silicon_cloud_model.value or cfg.silicon_cloud_model.value
             elif current_service == LLMServiceEnum.DEEPSEEK:
-                base_url = cfg.deepseek_api_base.value
-                api_key = cfg.deepseek_api_key.value
-                llm_model = cfg.deepseek_model.value
+                base_url = cfg.note_deepseek_api_base.value or cfg.deepseek_api_base.value
+                api_key = cfg.note_deepseek_api_key.value or cfg.deepseek_api_key.value
+                llm_model = cfg.note_deepseek_model.value or cfg.deepseek_model.value
             elif current_service == LLMServiceEnum.OLLAMA:
-                base_url = cfg.ollama_api_base.value
-                api_key = cfg.ollama_api_key.value
-                llm_model = cfg.ollama_model.value
+                base_url = cfg.note_ollama_api_base.value or cfg.ollama_api_base.value
+                api_key = cfg.note_ollama_api_key.value or cfg.ollama_api_key.value # Usually 'ollama' or empty
+                llm_model = cfg.note_ollama_model.value or cfg.ollama_model.value
             elif current_service == LLMServiceEnum.LM_STUDIO:
-                base_url = cfg.lm_studio_api_base.value
-                api_key = cfg.lm_studio_api_key.value
-                llm_model = cfg.lm_studio_model.value
+                base_url = cfg.note_lm_studio_api_base.value or cfg.lm_studio_api_base.value
+                api_key = cfg.note_lm_studio_api_key.value or cfg.lm_studio_api_key.value # Usually 'lm-studio' or empty
+                llm_model = cfg.note_lm_studio_model.value or cfg.lm_studio_model.value
             elif current_service == LLMServiceEnum.GEMINI:
-                base_url = cfg.gemini_api_base.value
-                api_key = cfg.gemini_api_key.value
-                llm_model = cfg.gemini_model.value
+                base_url = cfg.note_gemini_api_base.value or cfg.gemini_api_base.value
+                api_key = cfg.note_gemini_api_key.value or cfg.gemini_api_key.value
+                llm_model = cfg.note_gemini_model.value or cfg.gemini_model.value
+
+                # Conditionally set proxy ONLY for Gemini if enabled in config
+                if cfg.note_use_proxy.value: # Check the note-specific proxy setting
+                    proxy_url = cfg.proxy_address.value # Use configurable proxy address
+                    logger.info(f"使用笔记代理 ({proxy_url}) for Gemini API call.")
+                    os.environ['HTTP_PROXY'] = proxy_url
+                    os.environ['HTTPS_PROXY'] = proxy_url
+                    proxy_set_for_gemini = True # Flag that we modified the environment
+                else:
+                    logger.info("笔记代理已禁用, not setting for Gemini.")
+
             elif current_service == LLMServiceEnum.CHATGLM:
-                base_url = cfg.chatglm_api_base.value
-                api_key = cfg.chatglm_api_key.value
-                llm_model = cfg.chatglm_model.value
+                base_url = cfg.note_chatglm_api_base.value or cfg.chatglm_api_base.value
+                api_key = cfg.note_chatglm_api_key.value or cfg.chatglm_api_key.value
+                llm_model = cfg.note_chatglm_model.value or cfg.chatglm_model.value
             elif current_service == LLMServiceEnum.PUBLIC:
-                base_url = cfg.public_api_base.value
-                api_key = cfg.public_api_key.value
-                llm_model = cfg.public_model.value
+                base_url = cfg.note_public_api_base.value or cfg.public_api_base.value
+                api_key = cfg.note_public_api_key.value or cfg.public_api_key.value
+                llm_model = cfg.note_public_model.value or cfg.public_model.value
+            elif current_service == LLMServiceEnum.DISABLED:
+                 logger.warning("笔记生成功能已禁用 (LLM Service is DISABLED).")
+                 self.task_progress.emit(batch_task.file_path, 100, "笔记功能已禁用")
+                 batch_task.status = BatchTaskStatus.COMPLETED # Mark as completed, but no notes generated
+                 self.task_completed.emit(batch_task.file_path)
+                 return # Exit early
             else:
-                base_url = ""
-                api_key = ""
-                llm_model = ""
-                
-            # 设置OpenAI环境变量
-            import os
-            os.environ["OPENAI_BASE_URL"] = base_url
-            os.environ["OPENAI_API_KEY"] = api_key
-            
+                raise ValueError(f"Unsupported or unconfigured LLM service for notes: {current_service}")
+
             # 提取字幕文本
             subtitle_text = ""
             for seg in asr_data.segments:
                 start_time = QTime(0, 0).addMSecs(seg.start_time).toString("hh:mm:ss.zzz")[:-2]
-                subtitle_text += f"[{start_time}] {seg.text}\n"
-            
+                subtitle_text += f"[{start_time}] {seg.text}\\n" # Use \\n for literal newline in string template
+
             # 生成笔记
-            from pathlib import Path
-            import openai
-            
+            from string import Template # Ensure Template is imported
+
             # 创建笔记输出路径
             notes_path = self.factory.get_notes_path(output_path)
-            
+
             # 读取提示词文件内容
+            prompt_template_text = ""
             if prompt_file.exists():
-                prompt = prompt_file.read_text(encoding="utf-8")
+                prompt_template_text = prompt_file.read_text(encoding="utf-8")
                 logger.info("成功读取提示词文件内容")
             else:
-                logger.exception(f"生成笔记失败: {str(e)}")
-                return
-                # 创建默认提示词文件
-        
-            usr_prompt = """字幕内容如下:${subtitle_text}。
-要求：
-1. 直接生成markdown内容，不用代码块包裹
-2. 不用生多余内容
-3. 保持内容的连贯性和逻辑结构
+                logger.warning(f"Prompt file not found at {prompt_file}. Using a default prompt.")
+                # Define a default system prompt if the file is missing
+                prompt_template_text = "You are a helpful assistant that summarizes video transcripts into markdown notes."
+                # Optionally, create the default file here if desired
+                # try:
+                #     with open(prompt_file, "w", encoding="utf-8") as pf:
+                #         pf.write(prompt_template_text)
+                #     logger.info(f"Created default prompt file at {prompt_file}")
+                # except Exception as file_err:
+                #     logger.error(f"Failed to create default prompt file: {file_err}")
 
+            # User prompt template - use safe_substitute for flexibility
+            usr_prompt_template = """Subtitle content:
+${subtitle_text}
 
-请直接返回Markdown格式的笔记内容（不用代码块），无需包含其他解释。"""
+Based on the subtitle content, please generate concise and structured notes in Markdown format.
+Requirements:
+1. Output should be directly in Markdown format (no code blocks wrapping the entire content).
+2. Avoid adding extra introductory or concluding remarks.
+3. Ensure the notes maintain logical flow and coherence.
+4. Use appropriate Markdown syntax (headings, lists, bold text, etc.) for clarity.
 
-            # 使用Template替换变量
-            usr_prompt = Template(usr_prompt).safe_substitute(subtitle_text=subtitle_text)
-            
-            self.task_progress.emit(batch_task.file_path, 60, "正在使用大语言模型生成笔记...")
-            
+Please provide only the Markdown notes.
+"""
+            # Prepare prompts using templates
+            system_prompt = Template(prompt_template_text).safe_substitute(subtitle_text=subtitle_text) # Allow template in system prompt too
+            user_prompt = Template(usr_prompt_template).safe_substitute(subtitle_text=subtitle_text)
+
+            self.task_progress.emit(batch_task.file_path, 60, "正在使用大语言模型生成笔记...") # Update progress
+
+            # Initialize OpenAI client (or other LLM client based on service)
+            # Handle potential API key issues for local models like Ollama/LM Studio
+            effective_api_key = api_key if api_key and api_key.lower() not in ['ollama', 'lm-studio', 'none', ''] else None
+
             client = openai.OpenAI(
                 base_url=base_url,
-                api_key=api_key
+                api_key=effective_api_key
             )
 
-            # logger.info(f"创建了默认提示词文件: {prompt}")
-            logger.info(f"创建了默认提示词文件: {usr_prompt}")
+            logger.info(f"System Prompt: {system_prompt[:200]}...") # Log truncated prompts
+            logger.info(f"User Prompt: {user_prompt[:200]}...")
+
             response = client.chat.completions.create(
                 model=llm_model,
                 messages=[
-                    {"role": "system", "content": prompt},
-                    {"role": "user", "content": usr_prompt}
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
                 ],
                 temperature=0.3
             )
-            
+
             markdown_notes = response.choices[0].message.content
-            
+
             # 写入笔记文件
             with open(notes_path, "w", encoding="utf-8") as f:
                 f.write(markdown_notes)
-                
+            logger.info(f"笔记已成功写入到: {notes_path}")
+
             self.task_progress.emit(batch_task.file_path, 100, "笔记生成完成")
             batch_task.status = BatchTaskStatus.COMPLETED
-            self.task_completed.emit(batch_task.file_path)
-            
-        except Exception as e:
-            logger.exception(f"生成笔记失败: {str(e)}")
+            self.task_completed.emit(batch_task.file_path) # Signal completion
+
+        except FileNotFoundError as fnf_err:
+             logger.error(f"生成笔记失败 - 文件未找到: {str(fnf_err)}")
+             batch_task.status = BatchTaskStatus.FAILED
+             batch_task.error_message = str(fnf_err)
+             self.task_error.emit(batch_task.file_path, str(fnf_err))
+        except openai.APIConnectionError as api_conn_err:
+            logger.exception(f"生成笔记失败 - 无法连接到LLM服务 ({current_service} at {base_url}): {str(api_conn_err)}")
+            err_msg = f"无法连接到LLM服务: {api_conn_err}"
             batch_task.status = BatchTaskStatus.FAILED
-            batch_task.error_message = str(e)
-            self.task_error.emit(batch_task.file_path, str(e))
+            batch_task.error_message = err_msg
+            self.task_error.emit(batch_task.file_path, err_msg)
+        except openai.AuthenticationError as auth_err:
+            logger.exception(f"生成笔记失败 - LLM认证失败 ({current_service}): {str(auth_err)}")
+            err_msg = f"LLM认证失败: {auth_err}"
+            batch_task.status = BatchTaskStatus.FAILED
+            batch_task.error_message = err_msg
+            self.task_error.emit(batch_task.file_path, err_msg)
+        except openai.NotFoundError as nf_err:
+             logger.exception(f"生成笔记失败 - LLM模型未找到或API路径错误 ({current_service}, model: {llm_model}, base: {base_url}): {str(nf_err)}")
+             err_msg = f"LLM模型/API路径未找到: {nf_err}"
+             batch_task.status = BatchTaskStatus.FAILED
+             batch_task.error_message = err_msg
+             self.task_error.emit(batch_task.file_path, err_msg)
+        except Exception as e:
+            logger.exception(f"生成笔记时发生意外错误: {str(e)}")
+            batch_task.status = BatchTaskStatus.FAILED
+            batch_task.error_message = f"生成笔记时出错: {str(e)}"
+            self.task_error.emit(batch_task.file_path, batch_task.error_message)
+
+        finally:
+            # Restore original proxy settings if they were changed for Gemini
+            if proxy_set_for_gemini:
+                logger.info("恢复原始代理设置.")
+                if original_http_proxy is None:
+                    if 'HTTP_PROXY' in os.environ: del os.environ['HTTP_PROXY']
+                else:
+                    os.environ['HTTP_PROXY'] = original_http_proxy
+
+                if original_https_proxy is None:
+                    if 'HTTPS_PROXY' in os.environ: del os.environ['HTTPS_PROXY']
+                else:
+                    os.environ['HTTPS_PROXY'] = original_https_proxy

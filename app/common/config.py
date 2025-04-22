@@ -135,6 +135,7 @@ class Config(QConfig):
         "NoteLLM", "Public_API_Key", "please-do-not-use-for-personal-purposes"
     )
     note_public_api_base = ConfigItem("NoteLLM", "Public_API_Base", "https://ddg.bkfeng.top/v1")
+    note_use_proxy = ConfigItem("NoteLLM", "UseProxy", True, BoolValidator())
 
     # 原有的OpenAI配置
     openai_model = ConfigItem("LLM", "OpenAI_Model", "gpt-4o-mini")
@@ -184,6 +185,9 @@ class Config(QConfig):
     )
     public_api_base = ConfigItem("LLM", "Public_API_Base", "https://ddg.bkfeng.top/v1")
 
+    # ------------------- 代理配置 (General Proxy Settings) -------------------
+    proxy_address = ConfigItem("Proxy", "Address", "http://127.0.0.1:1080")
+
     # ------------------- 翻译配置 -------------------
     translator_service = OptionsConfigItem(
         "Translate",
@@ -191,6 +195,7 @@ class Config(QConfig):
         TranslatorServiceEnum.BING,
         OptionsValidator(TranslatorServiceEnum),
         EnumSerializer(TranslatorServiceEnum),
+        restart=True,
     )
     need_reflect_translate = ConfigItem(
         "Translate", "NeedReflectTranslate", False, BoolValidator()
